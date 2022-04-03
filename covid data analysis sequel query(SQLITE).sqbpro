@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="C:/Users/hp/Desktop/JAMES DATA FILES AND RESOURCE/JAMES SQL - COVID DATA ANALYSIS PROJECT/covid data analysis.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="8060"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/><expanded_item id="4" parent="1"/></tab_structure><tab_browse><current_table name="4,10:maincoviddeath"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="coviddeath" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort/><column_widths><column index="1" value="70"/><column index="2" value="70"/><column index="3" value="74"/><column index="4" value="73"/><column index="5" value="88"/><column index="6" value="84"/><column index="7" value="80"/><column index="8" value="152"/><column index="9" value="92"/><column index="10" value="88"/><column index="11" value="160"/><column index="12" value="161"/><column index="13" value="157"/><column index="14" value="229"/><column index="15" value="169"/><column index="16" value="165"/><column index="17" value="237"/><column index="18" value="128"/><column index="19" value="88"/><column index="20" value="165"/><column index="21" value="101"/><column index="22" value="178"/><column index="23" value="157"/><column index="24" value="234"/><column index="25" value="170"/><column index="26" value="247"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">select location, total_cases,population,total_deaths 
+from coviddeath
+WHERE location is 'World';
+
+SELECT continent,location  from coviddeath
+WHERE continent is NOT NULL 
+ORDER by 1,2;
+
+
+-- total deaths percentage to total cases
+SELECT location, date, population, total_cases, total_deaths, (total_deaths/total_cases)*100 as death_percentage
+FROM coviddeath
+-- where location like '%Nigeria%'
+ORDER by 1,2;
+
+
+-- total cases to population
+--the population with covid
+SELECT location, date, population, total_cases, total_deaths,
+ (total_cases/population)*100 as case_percentage
+FROM coviddeath
+-- WHERE location like '%Nigeria%'
+ORDER by 1,2;
+
+
+-- countries with highest infection rate
+SELECT location, cast (population as INTEGER), date, max(CAST (total_cases as INTEGER)) as HighestInfectionCount,
+CAST (total_deaths as INTEGER), max((total_cases/population))*100 as PercentPopulatIoninfected
+FROM coviddeath
+WHERE continent is NOT NULL 
+--and location like '%Nigeria%'
+GROUP by population,location
+ORDER by PercentPopulatIoninfected DESC; 
+
+
+
+--highest death count per population
+SELECT continent, population, max(total_deaths) as TotalDeathCount, 
+max((total_deaths/population))*100 as PopulationDeathPercentage 
+FROM coviddeath
+WHERE continent is NOT NULL 
+--and continent like '%World%'
+group by continent
+ORDER by max(total_deaths) DESC;
+
+
+--highest death count per continent
+SELECT location, population, max(total_deaths) as TotalDeathCount,
+max((total_deaths/population))*100 as PopulationDeathPercentage 
+FROM coviddeath
+WHERE continent is NULL 
+AND location is 'North America'
+or location is 'Europe' 
+or location is'Asia'
+or location is 'South America'
+or location is 'Africa'
+or location is 'Oceania'
+group by location
+ORDER by max(total_deaths) DESC;
+
+
+-- GLOBAL NUMBERS
+SELECT sum (new_cases) as total_cases, sum(new_deaths) as total_deaths, 
+sum(new_deaths)/sum(new_cases)*100 as death_rate_percentage
+FROM coviddeath
+WHERE continent is NOT NULL 
+--and location is 'Nigeria'
+ORDER by 1,2;
+
+
+-- total cases and death
+SELECT location, sum(new_cases) as total_cases, sum(new_deaths) as total_deaths 
+FROM coviddeath
+WHERE location is 'World'
+GROUP by location;
+
+
+--highest cases to death percentage
+SELECT max(total_cases), max(total_deaths),
+max(total_deaths)/max(total_cases)*100 as chance_of_death 
+FROM coviddeath;
+
+
+--finding out why the sum of 'new cases' does not equal to 'total cases' from the query above
+SELECT location,new_cases,new_deaths 
+FROM coviddeath
+WHERE new_cases is NULL 
+and new_deaths is NULL
+GROUP by location;
+
+
+-- selecting all from vacination TABLE
+SELECT * from covidvacination;
+
+-- joining tables coviddeath and covidvacination
+ 
+-- looking at total population vs vacination
+SELECT dea.location, dea.date,dea.continent,dea.population, vac.new_vaccinations,
+sum (vac.new_vaccinations) 
+OVER (PARTITION by dea.location order by dea.location,dea.date) as accumulatedvacination
+--,(accumulated_vacination/dea.population)*100
+--sum(vac.new_vaccinations)/sum(vac.population)*100 as percentage_vacinated
+FROM covidvacination vac
+JOIN coviddeath dea
+on dea.location = vac.location
+and dea.date = vac.date
+WHERE dea.continent is NOT NULL
+--group by dea.location
+ORDER by 1,2
+;
+
+-- use CTE (so as accumulatedvacination becomes a column in the table)
+WITH popvsvac (location,continent,population,new_vaccinations,accumulated_vaccination)
+as
+(
+SELECT dea.location,dea.continent,dea.population, vac.new_vaccinations,
+sum(vac.new_vaccinations) OVER (PARTITION by dea.location order by dea.location,dea.date)
+ as accumulated_vaccination
+
+FROM covidvacination vac
+JOIN coviddeath dea
+on dea.location = vac.location
+and dea.date = vac.date
+WHERE dea.continent is NOT NULL
+--group by dea.location
+--order by
+)
+SELECT *
+,(accumulated_vaccination/population)*100 as percent_population_vaccinated
+FROM popvsvac;
+
+-- USING TEMP TABLE
+DROP TABLE if EXISTS percentpopulationvaccinated
+CREATE TEMPORARY TABLE percentpopulationvaccinated
+(
+location TEXT,
+continent TEXT,
+population NUMERIC,
+new_vaccinations REAL,
+accumulated_vaccination REAL
+)
+-- inputing values into TEMPORARY table
+INSERT INTO percentpopulationvaccinated
+SELECT dea.location,dea.continent,dea.population, vac.new_vaccinations,
+sum(vac.new_vaccinations) OVER (PARTITION by dea.location order by dea.location,dea.date)
+as accumulated_vaccination
+FROM covidvacination vac
+JOIN coviddeath dea
+on dea.location = vac.location
+and dea.date = vac.date
+WHERE dea.continent is NOT NULL
+--group by dea.location
+--order by
+
+-- accumulated_vaccination percentage to population
+SELECT *, 
+(accumulated_vaccination/population)*100 
+FROM percentpopulationvaccinated
+
+--show all values in percentage population
+SELECT * FROM percentpopulationvaccinated
+
+--deleting the date column QUERY
+ALTER TABLE percentpopulationvaccinated
+DROP COLUMN date</sql><current_tab id="0"/></tab_sql></sqlb_project>
